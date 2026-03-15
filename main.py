@@ -15,7 +15,6 @@ import winsound
 # ============================================
 
 config = {
-    # Journey details
     "from_station": "SBC",
     "to_station":   "TLG",
     "date":         "18/03/2026",
@@ -23,7 +22,6 @@ config = {
     "train_number": "16227",
     "travel_class": "SL",
 
-    # Passenger details
     "passengers": [
         {
             "name":   "JOHN DOE",
@@ -35,11 +33,9 @@ config = {
 
     "mobile": "9999999999",
 
-    # Timing — update to current time + 2 min for testing
-    "search_at": {"hour": 23, "min": 10, "sec": 0},
-    "book_at":   {"hour": 23, "min": 10, "sec": 5},
+    "search_at": {"hour": 0, "min": 0, "sec": 0},
+    "book_at":   {"hour": 0, "min": 0, "sec": 5},
 
-    # Test mode — stops before final submit
     "test_mode": True,
 }
 
@@ -128,7 +124,6 @@ def login(page):
 
     time.sleep(2)
 
-    # Verify login
     logged_in = False
     for selector in [
         "a[title='My Account']",
@@ -145,7 +140,6 @@ def login(page):
 
     if not logged_in:
         log("⚠️ Cannot verify login automatically")
-        log("Make sure MY ACCOUNT shows in top right")
         input("Press ENTER when fully logged in...")
 
     log("✅ Session established")
@@ -154,11 +148,11 @@ def login(page):
 # ============================================
 # MODULE 2 — PRE-FILL SEARCH FORM
 # ============================================
+
 def prefill_search(page, cfg):
     log("📝 Pre-filling search form...")
 
     try:
-        # From station
         from_input = page.locator(
             "input[aria-label='Enter From station. Input is Mandatory.']"
         )
@@ -166,7 +160,7 @@ def prefill_search(page, cfg):
         time.sleep(0.5)
         from_input.fill("")
         from_input.type(cfg['from_station'])
-        time.sleep(2)
+        time.sleep(3)
 
         from_options = page.locator("li.ui-autocomplete-list-item")
         log(f"From options found: {from_options.count()}")
@@ -174,12 +168,11 @@ def prefill_search(page, cfg):
             text = from_options.nth(i).inner_text()
             log(f"Option {i}: {text}")
             if cfg['from_station'] in text:
-                from_options.nth(i).click()
+                from_options.nth(i).click(force=True)
                 log(f"Clicked: {text}")
                 break
-        time.sleep(0.5)
+        time.sleep(1)
 
-        # To station
         to_input = page.locator(
             "input[aria-label='Enter To station. Input is Mandatory.']"
         )
@@ -187,7 +180,7 @@ def prefill_search(page, cfg):
         time.sleep(0.5)
         to_input.fill("")
         to_input.type(cfg['to_station'])
-        time.sleep(2)
+        time.sleep(3)
 
         to_options = page.locator("li.ui-autocomplete-list-item")
         log(f"To options found: {to_options.count()}")
@@ -195,18 +188,16 @@ def prefill_search(page, cfg):
             text = to_options.nth(i).inner_text()
             log(f"Option {i}: {text}")
             if cfg['to_station'] in text:
-                to_options.nth(i).click()
+                to_options.nth(i).click(force=True)
                 log(f"Clicked: {text}")
                 break
-        time.sleep(0.5)
+        time.sleep(1)
 
-        # Verify
         from_val = from_input.input_value()
         to_val = to_input.input_value()
         log(f"From filled: {from_val}")
         log(f"To filled: {to_val}")
 
-        # Date
         date_input = page.locator("input.ui-inputtext").nth(2)
         date_input.click()
         time.sleep(0.5)
@@ -216,18 +207,15 @@ def prefill_search(page, cfg):
         page.keyboard.press("Escape")
         time.sleep(0.5)
 
-        # Quota dropdown
         page.locator("div.ui-dropdown").nth(1).click()
         time.sleep(1)
 
-        # Debug all quota options
         options = page.locator(".ui-dropdown-item")
         log(f"Quota options found: {options.count()}")
         for i in range(options.count()):
             text = options.nth(i).inner_text()
             log(f"Quota option {i}: {text}")
 
-        # Click matching quota
         clicked = False
         for i in range(options.count()):
             text = options.nth(i).inner_text()
@@ -242,7 +230,6 @@ def prefill_search(page, cfg):
             page.keyboard.press("Escape")
 
         time.sleep(0.5)
-
         log("✅ Search form pre-filled")
         return True
 
@@ -281,11 +268,11 @@ def keep_alive(page, until_time, offset=0):
 # ============================================
 # MODULE 4 — SEARCH AND SELECT TRAIN
 # ============================================
+
 def search_and_select(page, cfg):
     log("🔍 Firing search...")
 
     try:
-        # Debug
         from_val = page.locator(
             "input[aria-label='Enter From station. Input is Mandatory.']"
         ).input_value()
@@ -308,7 +295,6 @@ def search_and_select(page, cfg):
         log("✅ Results loaded")
         time.sleep(2)
 
-        # Find train
         train = page.locator(
             f"div.train-heading:has-text('{cfg['train_number']}')"
         ).first
@@ -325,89 +311,120 @@ def search_and_select(page, cfg):
 
         try:
             sl_btn = train_row.locator(
-                "span.hidden-xs:has-text('Sleeper')"
+                "div.pre-avl:has-text('Sleeper')"
             )
+            log(f"SL pre-avl found: {sl_btn.count()}")
             if sl_btn.count() > 0:
                 sl_btn.first.click()
-                log("✅ SL clicked — approach 1")
-                sl_clicked = True
-        except:
-            pass
+                time.sleep(2)
+                all_cells = page.locator("div.pre-avl")
+                for i in range(all_cells.count()):
+                    text = all_cells.nth(i).inner_text()
+                    if "Mar" in text or "Apr" in text:
+                        log("✅ SL tab clicked — approach 1 verified")
+                        sl_clicked = True
+                        break
+        except Exception as e:
+            log(f"Approach 1 error: {e}")
 
         if not sl_clicked:
             try:
                 sl_btn = page.locator(
-                    "span.hidden-xs:has-text('Sleeper (SL)')"
+                    "div.pre-avl:has-text('Sleeper')"
                 )
                 if sl_btn.count() > 0:
                     sl_btn.first.click(force=True)
-                    log("✅ SL clicked — approach 2 force")
-                    sl_clicked = True
-            except:
-                pass
+                    time.sleep(2)
+                    all_cells = page.locator("div.pre-avl")
+                    for i in range(all_cells.count()):
+                        text = all_cells.nth(i).inner_text()
+                        if "Mar" in text or "Apr" in text:
+                            log("✅ SL tab clicked — approach 2 verified")
+                            sl_clicked = True
+                            break
+            except Exception as e:
+                log(f"Approach 2 error: {e}")
 
         if not sl_clicked:
             try:
                 page.evaluate("""
-                    var spans = document.querySelectorAll('span.hidden-xs');
-                    for(var s of spans){
-                        if(s.innerText.includes('Sleeper')){
-                            s.dispatchEvent(new MouseEvent('click', {
-                                bubbles: true,
-                                cancelable: true,
-                                view: window
-                            }));
+                    var divs = document.querySelectorAll('div.pre-avl');
+                    for(var d of divs){
+                        if(d.innerText.includes('Sleeper')){
+                            d.click();
                             break;
                         }
                     }
                 """)
-                log("✅ SL clicked — approach 3 dispatch")
-                sl_clicked = True
-            except:
-                pass
+                time.sleep(2)
+                all_cells = page.locator("div.pre-avl")
+                for i in range(all_cells.count()):
+                    text = all_cells.nth(i).inner_text()
+                    if "Mar" in text or "Apr" in text:
+                        log("✅ SL tab clicked — approach 3 verified")
+                        sl_clicked = True
+                        break
+            except Exception as e:
+                log(f"Approach 3 error: {e}")
 
         if not sl_clicked:
-            log("⚠️ Auto SL click failed")
-            input("Click SL manually then press ENTER...")
-
-        time.sleep(1)
+            log("⚠️ Please click Sleeper (SL) tab manually")
+            input("Press ENTER after clicking SL tab...")
 
         # Wait for date cells
-        log("📅 Waiting for date availability...")
-        page.wait_for_selector(
-            "div.pre-avl",
-            timeout=10000
-        )
-        time.sleep(1)
+        log("📅 Waiting for date cells to load...")
+        for wait in range(10):
+            cells = page.locator("div.pre-avl")
+            date_found = False
+            for i in range(cells.count()):
+                text = cells.nth(i).inner_text()
+                if "Mar" in text or "Apr" in text:
+                    date_found = True
+                    break
+            if date_found:
+                log("✅ Date cells ready")
+                break
+            time.sleep(1)
+            log(f"Waiting... {wait+1}s")
+        else:
+            log("⚠️ Dates not loading — click SL manually")
+            input("Click SL tab then press ENTER...")
+
+        time.sleep(0.5)
 
         # Click correct date
         date_cells = page.locator("div.pre-avl")
-        log(f"Date cells found: {date_cells.count()}")
-
-        # Find cell matching journey date
         clicked_date = False
         for i in range(date_cells.count()):
             cell_text = date_cells.nth(i).inner_text()
             log(f"Date cell {i}: {cell_text}")
-            if cfg['date'] in cell_text or "18 Mar" in cell_text:
+            if "Mar" in cell_text or "Apr" in cell_text:
                 date_cells.nth(i).click()
                 log(f"✅ Date clicked: {cell_text}")
                 clicked_date = True
                 break
 
         if not clicked_date:
-            log("⚠️ Exact date not found — clicking first cell")
-            date_cells.first.click()
-            log("✅ First date cell clicked")
+            log("⚠️ Date not found — click manually")
+            input("Click your journey date then press ENTER...")
 
         time.sleep(1)
 
         # Wait for Book Now
-        page.wait_for_selector(
-            "button.btnDefault",
-            timeout=10000
-        )
-        log("✅ Book Now button visible")
+        log("⏳ Waiting for Book Now to activate...")
+        for wait in range(15):
+            btn = page.locator(
+                "button.train_Search:has-text('Book Now')"
+            )
+            if btn.count() > 0:
+                log("✅ Book Now is ACTIVE")
+                break
+            time.sleep(1)
+            log(f"Waiting for activation... {wait+1}s")
+        else:
+            log("⚠️ Book Now not activating")
+            input("Click your date then press ENTER...")
+
         return True
 
     except Exception as e:
@@ -426,41 +443,71 @@ def wait_and_book(page, book_at, offset=0):
     for attempt in range(20):
         try:
             btn = page.locator(
-                "button.btnDefault:not(.disable-book)"
+                "button.train_Search:has-text('Book Now')"
             )
 
             if btn.count() > 0:
-                log("🟢 Clicking Book Now")
-                btn.first.click()
-                time.sleep(1)
+                log(f"Book Now found: {btn.count()}")
+                log(f"Book Now visible: {btn.last.is_visible()}")
+                log(f"Book Now enabled: {btn.last.is_enabled()}")
 
-                # Check for error
+                # Scroll into view
+                btn.last.scroll_into_view_if_needed()
+                time.sleep(0.5)
+
+                log("🟢 Clicking Book Now — last button")
+                btn.last.click()
+                time.sleep(3)
+
+                # Check for errors
                 if page.locator(
                     "text=Please Try again"
                 ).count() > 0:
-                    log("❌ Error page — double click detected")
+                    log("❌ Error page")
                     break
 
-                # Check for too early popup
                 if page.locator(
                     "text=Booking not yet started"
                 ).count() > 0:
                     log("⚠️ Too early — retrying")
-                    page.click("button:has-text('OK')")
-                    time.sleep(0.2)
+                    page.evaluate("""
+                        var btns = document.querySelectorAll('button');
+                        for(var b of btns){
+                            if(b.innerText.trim() === 'OK'){
+                                b.click();
+                                break;
+                            }
+                        }
+                    """)
+                    time.sleep(0.5)
                     continue
 
-                # Wait for passenger page
-                try:
-                    page.wait_for_url(
-                        "**/booking/psgninput",
-                        timeout=10000
-                    )
-                    log("✅ Passenger page loaded")
-                except:
-                    log("⚠️ URL not changed yet")
+                # Check passenger form directly
+                if page.locator(
+                    "input[placeholder='Name']"
+                ).count() > 0:
+                    log("✅ Passenger form detected")
+                    return True
 
-                log("✅ Book Now accepted")
+                # Poll URL and form
+                for wait in range(20):
+                    current = page.url
+                    log(f"URL check {wait+1}: {current}")
+                    if "psgninput" in current:
+                        log("✅ Passenger page reached")
+                        return True
+                    if "login" in current:
+                        log("⚠️ Redirected to login")
+                        input("Login and press ENTER...")
+                        return True
+                    if page.locator(
+                        "input[placeholder='Name']"
+                    ).count() > 0:
+                        log("✅ Passenger form detected in poll")
+                        return True
+                    time.sleep(1)
+
+                log("⚠️ Continuing anyway")
                 return True
 
         except Exception as e:
@@ -480,49 +527,12 @@ def fill_passengers(page, cfg):
 
     try:
         log(f"Current URL: {page.url}")
-        time.sleep(2)
 
-        # Handle popups — read text first
-        for _ in range(5):
-            if page.locator(
-                "input[placeholder='User Name']"
-            ).count() > 0:
-                log("⚠️ Login popup — please login")
-                input("Login and press ENTER...")
-                time.sleep(2)
-                break
-
-            if page.locator(
-                "button:has-text('OK')"
-            ).count() > 0:
-                # Read popup text
-                try:
-                    popup_text = page.locator(
-                        ".ui-dialog-content, .modal-body, p"
-                    ).first.inner_text()
-                    log(f"⚠️ Popup says: {popup_text}")
-                except:
-                    log("⚠️ OK popup detected")
-                page.click("button:has-text('OK')")
-                time.sleep(1)
-                continue
-
-            if page.locator(
-                "button:has-text('Continue')"
-            ).count() > 0:
-                log("⚠️ Continue popup")
-                page.click("button:has-text('Continue')")
-                time.sleep(2)
-                continue
-
-            break
-
-        log(f"URL before form: {page.url}")
-
-        # Wait for passenger form
+        # Just wait for passenger form directly
+        log("⏳ Waiting for passenger form...")
         page.wait_for_selector(
             "input[placeholder='Name']",
-            timeout=30000
+            timeout=60000
         )
         log("✅ Passenger form loaded")
 
@@ -550,7 +560,6 @@ def fill_passengers(page, cfg):
         elapsed = time.time() - start
         log(f"✅ Passengers filled in {elapsed:.2f}s")
 
-        # Test mode
         if cfg.get('test_mode'):
             log("🧪 TEST MODE — stopping before submit")
             log("✅ Full traversal verified!")
@@ -640,44 +649,34 @@ def main():
         )
         page = browser.new_page()
 
-        # Step 1 — Manual login
         login(page)
 
-        # Step 2 — Pre-fill search
         if not prefill_search(page, config):
             log("❌ Pre-fill failed — exiting")
             browser.close()
             return
 
-        # Step 3 — Keep alive
         keep_alive(page, config['search_at'], offset)
-
-        # Step 4 — Wait for search time
         wait_until(config['search_at'], offset)
 
-        # Step 5 — Search and select
         if not search_and_select(page, config):
             log("❌ Train selection failed — exiting")
             browser.close()
             return
 
-        # Step 6 — Wait and book
         if not wait_and_book(page, config['book_at'], offset):
             log("❌ Booking failed — exiting")
             browser.close()
             return
 
-        # Step 7 — Fill passengers
         if not fill_passengers(page, config):
             browser.close()
             return
 
-        # Step 8 — CAPTCHA
         if not handle_captcha(page):
             browser.close()
             return
 
-        # Step 9 — Payment
         handle_payment(page)
 
         browser.close()
