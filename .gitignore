@@ -2,6 +2,7 @@ venv/
 credentials.env
 session.json
 passengers.enc
+passenger_error.png
 .env
 __pycache__/
 *.pyc
