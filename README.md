@@ -1,5 +1,30 @@
 # QT — Quick Tatkal Agent
 
+Hybrid semi-automated assistant for IRCTC Tatkal booking.
+
+This project demonstrates browser automation using Playwright to accelerate the booking workflow while keeping CAPTCHA and payment under human control.
+
+---
+
+## Features
+
+- Precision timed search
+- Automatic train detection and class selection
+- Passenger autofill (~0.1s)
+- Insurance handling
+- Human-in-the-loop CAPTCHA stage
+- Manual payment completion
+
+---
+
+## Ethical Design
+
+- No CAPTCHA bypass
+- No multiple account automation
+- Human confirmation for sensitive steps
+- Educational project
+# QT — Quick Tatkal Agent
+
 A hybrid semi-automated agent to assist with 
 IRCTC Tatkal ticket booking.
 
