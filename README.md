@@ -1,4 +1,6 @@
 # QT — Quick Tatkal Agent
+![Python](https://img.shields.io/badge/Python-3.x-blue)
+![Playwright](https://img.shields.io/badge/Automation-Playwright-green)
 
 Hybrid semi-automated assistant for IRCTC Tatkal booking.
 
