@@ -5,6 +5,7 @@
 
 from playwright.sync_api import sync_playwright, TimeoutError
 import time
+import random
 import pytz
 import ntplib
 from datetime import datetime
@@ -17,26 +18,26 @@ import winsound
 config = {
     "from_station": "SBC",
     "to_station":   "TLG",
-    "date":         "18/03/2026",
+    "date":         "25/03/2026",
     "quota":        "GENERAL",
     "train_number": "16227",
     "travel_class": "SL",
 
     "passengers": [
         {
-            "name":   "JOHN DOE",
-            "age":    "21",
+            "name":   "Abhishek Bharadwaj",
+            "age":    "20",
             "gender": "M",
-            "berth":  "LB",
+            "berth":  "SU",
         }
     ],
 
-    "mobile": "9999999999",
+    "mobile": "8660713011",
 
     "search_at": {"hour": 0, "min": 0, "sec": 0},
     "book_at":   {"hour": 0, "min": 0, "sec": 5},
 
-    "test_mode": True,
+    "test_mode": False,
 }
 
 # ============================================
@@ -451,7 +452,6 @@ def wait_and_book(page, book_at, offset=0):
                 log(f"Book Now visible: {btn.last.is_visible()}")
                 log(f"Book Now enabled: {btn.last.is_enabled()}")
 
-                # Scroll into view
                 btn.last.scroll_into_view_if_needed()
                 time.sleep(0.5)
 
@@ -459,7 +459,6 @@ def wait_and_book(page, book_at, offset=0):
                 btn.last.click()
                 time.sleep(3)
 
-                # Check for errors
                 if page.locator(
                     "text=Please Try again"
                 ).count() > 0:
@@ -482,14 +481,12 @@ def wait_and_book(page, book_at, offset=0):
                     time.sleep(0.5)
                     continue
 
-                # Check passenger form directly
                 if page.locator(
                     "input[placeholder='Name']"
                 ).count() > 0:
                     log("✅ Passenger form detected")
                     return True
 
-                # Poll URL and form
                 for wait in range(20):
                     current = page.url
                     log(f"URL check {wait+1}: {current}")
@@ -519,92 +516,137 @@ def wait_and_book(page, book_at, offset=0):
     return False
 
 # ============================================
-# MODULE 6 — FILL PASSENGER FORM
+# MODULE 6 — PASSENGER FORM → REVIEW PAGE
 # ============================================
 
 def fill_passengers(page, cfg):
+
     log("👤 Filling passenger details...")
 
     try:
+
         log(f"Current URL: {page.url}")
 
-        # Just wait for passenger form directly
-        log("⏳ Waiting for passenger form...")
-        page.wait_for_selector(
-            "input[placeholder='Name']",
-            timeout=60000
-        )
+        page.wait_for_selector("input[placeholder='Name']", timeout=60000)
+
         log("✅ Passenger form loaded")
 
         start = time.time()
 
         for i, p in enumerate(cfg['passengers']):
-            page.locator(
-                "input[placeholder='Name']"
-            ).nth(i).fill(p['name'])
+
+            page.locator("input[placeholder='Name']").nth(i).fill(p["name"])
 
             page.locator(
                 "input[formcontrolname='passengerAge']"
-            ).nth(i).fill(p['age'])
+            ).nth(i).fill(p["age"])
 
             page.locator(
                 "select[formcontrolname='passengerGender']"
-            ).nth(i).select_option(p['gender'])
+            ).nth(i).select_option(p["gender"])
 
             page.locator(
                 "select[formcontrolname='passengerBerthChoice']"
-            ).nth(i).select_option(p['berth'])
+            ).nth(i).select_option(p["berth"])
 
-        page.fill("input[id='mobileNumber']", cfg['mobile'])
+        page.locator("input#mobileNumber").fill(cfg["mobile"])
 
         elapsed = time.time() - start
-        log(f"✅ Passengers filled in {elapsed:.2f}s")
+        log(f"✅ Form filled in {elapsed:.2f}s")
 
-        if cfg.get('test_mode'):
-            log("🧪 TEST MODE — stopping before submit")
-            log("✅ Full traversal verified!")
-            input("Press ENTER to close...")
-            return False
+        log("⏳ Waiting for Angular validation...")
 
-        page.click("button:has-text('Continue')")
+        page.wait_for_function("""
+            () => {
+                const btn = [...document.querySelectorAll("button")]
+                    .find(b => b.innerText.trim() === "Continue");
+                return btn && !btn.disabled;
+            }
+        """)
+
+        continue_btn = page.locator(
+            "button:has-text('Continue'):visible"
+        ).first
+
+        log("🖱 Clicking Continue...")
+        continue_btn.click()
+
         log("✅ Continue clicked")
+
+        log("⏳ Waiting for review / insurance section...")
+
+        # wait for review page content
+        page.wait_for_selector("text=Travel Insurance", timeout=15000)
+
+        # -------------------------
+        # SELECT NO TRAVEL INSURANCE
+        # -------------------------
+
+        try:
+
+            no_insurance = page.locator(
+                "label:has-text(\"No, I don't want travel insurance\")"
+            )
+
+            if no_insurance.count() > 0:
+                no_insurance.first.click()
+                log("Insurance declined (radio selected)")
+
+        except Exception as e:
+            log(f"Insurance selection failed: {e}")
+
+        page.wait_for_timeout(500)
+
         return True
 
     except Exception as e:
-        log(f"❌ Passenger fill failed: {e}")
-        return False
 
+        log(f"❌ Passenger fill failed: {e}")
+
+        page.screenshot(path="passenger_error.png")
+
+        log("📸 Screenshot saved: passenger_error.png")
+
+        return False
 # ============================================
 # MODULE 7 — CAPTCHA HANDOFF
 # ============================================
 
 def handle_captcha(page):
-    log("🔐 Waiting for CAPTCHA...")
+
+    log("🔐 CAPTCHA stage reached")
 
     try:
+
         page.wait_for_selector(
-            "img.captcha-img",
-            timeout=15000
+            "img[alt*='captcha'], img[src*='captcha'], img.captcha-img",
+            timeout=30000
         )
 
         beep(3)
 
-        print("\n" + "="*40)
-        print("⚠️  CAPTCHA — JUST TYPE NOW!")
-        print("    Cursor already in box")
-        print("    Press ENTER when done")
-        print("="*40 + "\n")
+        print("\n========================================")
+        print("⚠️ CAPTCHA — TYPE NOW")
+        print("After typing press ENTER in terminal")
+        print("========================================")
 
-        page.wait_for_url(
-            "**/booking/reviewBooking",
-            timeout=60000
-        )
+        try:
+            page.locator("input[type='text']").first.click()
+        except:
+            pass
 
-        log("✅ CAPTCHA solved — SEAT DECIDED!")
+        input("Press ENTER after solving captcha...")
+
+        log("✅ CAPTCHA entered")
+
         return True
 
     except Exception as e:
-        log(f"❌ CAPTCHA failed: {e}")
+
+        log(f"❌ CAPTCHA detection failed: {e}")
+
+        page.screenshot(path="captcha_error.png")
+
         return False
 
 # ============================================
@@ -679,7 +721,16 @@ def main():
 
         handle_payment(page)
 
-        browser.close()
+        try:
+            print("\nAutomation finished.")
+            input("Press ENTER to close browser...")
+
+        finally:
+            try:
+                browser.close()
+            except:
+                pass
+
         log("✅ Agent finished")
 
 if __name__ == "__main__":
