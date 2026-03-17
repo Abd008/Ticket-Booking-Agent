@@ -524,17 +524,16 @@ def fill_passengers(page, cfg):
     log("👤 Filling passenger details...")
 
     try:
-
         log(f"Current URL: {page.url}")
 
+        # Wait for passenger form
         page.wait_for_selector("input[placeholder='Name']", timeout=60000)
-
         log("✅ Passenger form loaded")
 
         start = time.time()
 
+        # Fill passenger(s)
         for i, p in enumerate(cfg['passengers']):
-
             page.locator("input[placeholder='Name']").nth(i).fill(p["name"])
 
             page.locator(
@@ -549,13 +548,14 @@ def fill_passengers(page, cfg):
                 "select[formcontrolname='passengerBerthChoice']"
             ).nth(i).select_option(p["berth"])
 
+        # Mobile number
         page.locator("input#mobileNumber").fill(cfg["mobile"])
 
         elapsed = time.time() - start
         log(f"✅ Form filled in {elapsed:.2f}s")
 
+        # Wait for Continue button enabled
         log("⏳ Waiting for Angular validation...")
-
         page.wait_for_function("""
             () => {
                 const btn = [...document.querySelectorAll("button")]
@@ -570,44 +570,62 @@ def fill_passengers(page, cfg):
 
         log("🖱 Clicking Continue...")
         continue_btn.click()
-
         log("✅ Continue clicked")
 
-        log("⏳ Waiting for review / insurance section...")
+        # ==========================
+        # FAST INSURANCE HANDLING
+        # ==========================
 
-        # wait for review page content
-        page.wait_for_selector("text=Travel Insurance", timeout=15000)
+        log("⏳ Waiting for insurance section...")
 
-        # -------------------------
-        # SELECT NO TRAVEL INSURANCE
-        # -------------------------
+        page.wait_for_selector(
+            "label:has-text(\"No, I don't want travel insurance\")",
+            timeout=15000
+        )
 
-        try:
+        log("✅ Insurance section loaded")
 
-            no_insurance = page.locator(
-                "label:has-text(\"No, I don't want travel insurance\")"
-            )
+        no_insurance = page.locator(
+            "label:has-text(\"No, I don't want travel insurance\")"
+        )
 
-            if no_insurance.count() > 0:
-                no_insurance.first.click()
-                log("Insurance declined (radio selected)")
+        clicked = False
 
-        except Exception as e:
-            log(f"Insurance selection failed: {e}")
+        # ⚡ Fast retry (no long delays)
+        for attempt in range(5):
+            try:
+                no_insurance.first.click(force=True)
+                log("✅ Insurance declined")
+                clicked = True
+                break
+            except:
+                time.sleep(0.2)
 
-        page.wait_for_timeout(500)
+        # 🔁 JS fallback (last resort)
+        if not clicked:
+            log("⚠️ Insurance click fallback (JS)")
+            page.evaluate("""
+                let el = [...document.querySelectorAll('label')]
+                    .find(e => e.innerText.includes("No, I don't want"));
+                if(el) el.click();
+            """)
+
+        # ⚡ Minimal stabilization (critical)
+        page.wait_for_timeout(300)
 
         return True
 
     except Exception as e:
-
         log(f"❌ Passenger fill failed: {e}")
 
-        page.screenshot(path="passenger_error.png")
-
-        log("📸 Screenshot saved: passenger_error.png")
+        try:
+            page.screenshot(path="passenger_error.png")
+            log("📸 Screenshot saved: passenger_error.png")
+        except:
+            pass
 
         return False
+
 # ============================================
 # MODULE 7 — CAPTCHA HANDOFF
 # ============================================
@@ -617,11 +635,20 @@ def handle_captcha(page):
     log("🔐 CAPTCHA stage reached")
 
     try:
+        # Wait for ANY captcha indicator (robust detection)
+        page.wait_for_function("""
+            () => {
+                return (
+                    document.querySelector("input[placeholder*='Captcha']") ||
+                    document.querySelector("input[formcontrolname*='captcha']") ||
+                    document.querySelector("img[src*='captcha']") ||
+                    document.querySelector("canvas") ||
+                    document.body.innerText.toLowerCase().includes("captcha")
+                );
+            }
+        """, timeout=60000)
 
-        page.wait_for_selector(
-            "img[alt*='captcha'], img[src*='captcha'], img.captcha-img",
-            timeout=30000
-        )
+        log("✅ CAPTCHA detected")
 
         beep(3)
 
@@ -630,8 +657,11 @@ def handle_captcha(page):
         print("After typing press ENTER in terminal")
         print("========================================")
 
+        # Try focusing input box
         try:
-            page.locator("input[type='text']").first.click()
+            page.locator(
+                "input[placeholder*='Captcha'], input[formcontrolname*='captcha']"
+            ).first.click(timeout=2000)
         except:
             pass
 
@@ -645,7 +675,11 @@ def handle_captcha(page):
 
         log(f"❌ CAPTCHA detection failed: {e}")
 
-        page.screenshot(path="captcha_error.png")
+        try:
+            page.screenshot(path="captcha_error.png")
+            log("📸 Screenshot saved: captcha_error.png")
+        except:
+            pass
 
         return False
 
