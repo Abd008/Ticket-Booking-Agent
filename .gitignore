@@ -1,8 +1,43 @@
-venv/
-credentials.env
-session.json
-passengers.enc
-passenger_error.png
-.env
+# ----------------------
+# Python
+# ----------------------
 __pycache__/
 *.pyc
+*.pyo
+
+# ----------------------
+# Virtual Environment
+# ----------------------
+venv/
+
+# ----------------------
+# Environment / Secrets
+# ----------------------
+.env
+credentials.env
+
+# ----------------------
+# Session / Sensitive Data
+# ----------------------
+session.json
+passengers.enc
+user_data/
+
+# ----------------------
+# Runtime / Logs
+# ----------------------
+logs.txt
+*.log
+
+# ----------------------
+# Screenshots / Debug
+# ----------------------
+*.png
+passenger_error.png
+captcha_error.png
+
+# ----------------------
+# OS files
+# ----------------------
+.DS_Store
+Thumbs.db
