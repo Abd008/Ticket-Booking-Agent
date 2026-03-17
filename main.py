@@ -52,7 +52,13 @@ def beep(times=3):
 def log(msg):
     ist = pytz.timezone('Asia/Kolkata')
     now = datetime.now(ist).strftime("%H:%M:%S.%f")[:-3]
-    print(f"[{now}] {msg}")
+    line = f"[{now}] {msg}"
+
+    print(line)
+
+    # write to log file
+    with open("logs.txt", "a", encoding="utf-8") as f:
+        f.write(line + "\n")
 
 def get_ntp_offset():
     try:
@@ -711,6 +717,8 @@ def handle_payment(page):
 # MAIN
 # ============================================
 
+# clear previous logs
+open("logs.txt", "w").close()
 def main():
     print("\n" + "="*50)
     print("  QT — Quick Tatkal Agent v1.0")

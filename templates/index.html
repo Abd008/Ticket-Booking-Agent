@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>QT Agent</title>
+</head>
+<body>
+
+<h1>QT — Booking Assistant</h1>
+
+<form action="/start" method="post">
+
+    <label>From:</label>
+    <input type="text" name="from_station" required><br><br>
+
+    <label>To:</label>
+    <input type="text" name="to_station" required><br><br>
+
+    <label>Date:</label>
+    <input type="text" name="date" required><br><br>
+
+    <label>Train Number:</label>
+    <input type="text" name="train_number" required><br><br>
+
+    <label>Class:</label>
+    <input type="text" name="travel_class" required><br><br>
+
+    <button type="submit">Start Booking</button>
+
+</form>
+
+<hr>
+
+<h2>Live Logs</h2>
+
+<pre id="logs" style="
+    background:black;
+    color:lime;
+    padding:10px;
+    height:300px;
+    overflow:auto;
+"></pre>
+
+<script>
+function fetchLogs() {
+    fetch('/logs')
+        .then(res => res.text())
+        .then(data => {
+            const logBox = document.getElementById('logs');
+            logBox.textContent = data;
+
+            // auto scroll
+            logBox.scrollTop = logBox.scrollHeight;
+        });
+}
+
+// refresh every second
+setInterval(fetchLogs, 1000);
+</script>
+
+</body>
+</html>
