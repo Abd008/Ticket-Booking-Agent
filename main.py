@@ -10,6 +10,8 @@ import pytz
 import ntplib
 from datetime import datetime
 import winsound
+import json
+import sys
 
 # ============================================
 # CONFIGURATION
@@ -160,44 +162,64 @@ def prefill_search(page, cfg):
     log("📝 Pre-filling search form...")
 
     try:
+        # ✅ DEFENSIVE: Ensure required fields exist
+        from_station = cfg.get('from_station', '').strip().upper()
+        to_station = cfg.get('to_station', '').strip().upper()
+        quota = cfg.get('quota', '').strip()
+        date = cfg.get('date', '').strip()
+        
+        if not from_station or not to_station or not quota or not date:
+            log(f"❌ Missing required fields: from={from_station}, to={to_station}, quota={quota}, date={date}")
+            return False
+
+        # ✅ FUNCTION: Select from autocomplete with retry
+        def select_from_autocomplete(input_locator, station_code, input_label):
+            log(f"🔍 Selecting {input_label}: {station_code}")
+            input_locator.click()
+            time.sleep(0.5)
+            input_locator.fill("")
+            input_locator.type(station_code[:3])  # Type first 3 chars
+            time.sleep(2)
+
+            options = page.locator("li.ui-autocomplete-list-item")
+            log(f"Options found for {input_label}: {options.count()}")
+            
+            selected = False
+            for i in range(options.count()):
+                text = options.nth(i).inner_text()
+                log(f"  Option {i}: {text}")
+                
+                # Match by station code at the beginning or in first line
+                if station_code in text.upper():
+                    options.nth(i).click(force=True)
+                    log(f"✅ Clicked: {text}")
+                    time.sleep(1)
+                    selected = True
+                    break
+            
+            if not selected:
+                log(f"⚠️ {input_label} option not found for {station_code}")
+                # Press escape to close dropdown
+                page.keyboard.press("Escape")
+                time.sleep(0.5)
+            
+            # Verify the value was committed
+            final_value = input_locator.input_value()
+            log(f"✅ {input_label} final value: '{final_value}'")
+            return selected
+
+        # Select From Station
         from_input = page.locator(
             "input[aria-label='Enter From station. Input is Mandatory.']"
         )
-        from_input.click()
-        time.sleep(0.5)
-        from_input.fill("")
-        from_input.type(cfg['from_station'])
-        time.sleep(3)
-
-        from_options = page.locator("li.ui-autocomplete-list-item")
-        log(f"From options found: {from_options.count()}")
-        for i in range(from_options.count()):
-            text = from_options.nth(i).inner_text()
-            log(f"Option {i}: {text}")
-            if cfg['from_station'] in text:
-                from_options.nth(i).click(force=True)
-                log(f"Clicked: {text}")
-                break
+        select_from_autocomplete(from_input, from_station, "From Station")
         time.sleep(1)
 
+        # Select To Station
         to_input = page.locator(
             "input[aria-label='Enter To station. Input is Mandatory.']"
         )
-        to_input.click()
-        time.sleep(0.5)
-        to_input.fill("")
-        to_input.type(cfg['to_station'])
-        time.sleep(3)
-
-        to_options = page.locator("li.ui-autocomplete-list-item")
-        log(f"To options found: {to_options.count()}")
-        for i in range(to_options.count()):
-            text = to_options.nth(i).inner_text()
-            log(f"Option {i}: {text}")
-            if cfg['to_station'] in text:
-                to_options.nth(i).click(force=True)
-                log(f"Clicked: {text}")
-                break
+        select_from_autocomplete(to_input, to_station, "To Station")
         time.sleep(1)
 
         from_val = from_input.input_value()
@@ -205,15 +227,17 @@ def prefill_search(page, cfg):
         log(f"From filled: {from_val}")
         log(f"To filled: {to_val}")
 
+        # Select Date
         date_input = page.locator("input.ui-inputtext").nth(2)
         date_input.click()
         time.sleep(0.5)
         date_input.press("Control+a")
-        date_input.type(cfg['date'])
+        date_input.type(date)
         time.sleep(0.5)
         page.keyboard.press("Escape")
         time.sleep(0.5)
 
+        # Select Quota
         page.locator("div.ui-dropdown").nth(1).click()
         time.sleep(1)
 
@@ -226,7 +250,7 @@ def prefill_search(page, cfg):
         clicked = False
         for i in range(options.count()):
             text = options.nth(i).inner_text()
-            if cfg['quota'] in text:
+            if quota in text:
                 options.nth(i).click()
                 log(f"✅ Quota selected: {text}")
                 clicked = True
@@ -242,6 +266,8 @@ def prefill_search(page, cfg):
 
     except Exception as e:
         log(f"❌ Pre-fill failed: {e}")
+        import traceback
+        log(f"Traceback: {traceback.format_exc()}")
         return False
 
 # ============================================
@@ -532,13 +558,17 @@ def fill_passengers(page, cfg):
     try:
         log(f"Current URL: {page.url}")
 
-        # Wait for passenger form
+        # ==========================
+        # WAIT FOR FORM
+        # ==========================
         page.wait_for_selector("input[placeholder='Name']", timeout=60000)
         log("✅ Passenger form loaded")
 
         start = time.time()
 
-        # Fill passenger(s)
+        # ==========================
+        # PASSENGER FILL
+        # ==========================
         for i, p in enumerate(cfg['passengers']):
             page.locator("input[placeholder='Name']").nth(i).fill(p["name"])
 
@@ -554,14 +584,17 @@ def fill_passengers(page, cfg):
                 "select[formcontrolname='passengerBerthChoice']"
             ).nth(i).select_option(p["berth"])
 
-        # Mobile number
+        # Mobile
         page.locator("input#mobileNumber").fill(cfg["mobile"])
 
         elapsed = time.time() - start
         log(f"✅ Form filled in {elapsed:.2f}s")
 
-        # Wait for Continue button enabled
+        # ==========================
+        # CONTINUE BUTTON
+        # ==========================
         log("⏳ Waiting for Angular validation...")
+
         page.wait_for_function("""
             () => {
                 const btn = [...document.querySelectorAll("button")]
@@ -579,45 +612,110 @@ def fill_passengers(page, cfg):
         log("✅ Continue clicked")
 
         # ==========================
-        # FAST INSURANCE HANDLING
+        # INSURANCE (OPTIONAL)
         # ==========================
+        log("⏳ Checking for insurance section...")
 
-        log("⏳ Waiting for insurance section...")
+        try:
+            page.wait_for_selector(
+                "label:has-text(\"No, I don't want travel insurance\")",
+                timeout=5000
+            )
 
-        page.wait_for_selector(
-            "label:has-text(\"No, I don't want travel insurance\")",
-            timeout=15000
-        )
+            log("✅ Insurance detected")
 
-        log("✅ Insurance section loaded")
+            no_insurance = page.locator(
+                "label:has-text(\"No, I don't want travel insurance\")"
+            )
 
-        no_insurance = page.locator(
-            "label:has-text(\"No, I don't want travel insurance\")"
-        )
+            clicked = False
 
-        clicked = False
+            for _ in range(5):
+                try:
+                    no_insurance.first.click(force=True)
+                    clicked = True
+                    log("✅ Insurance declined")
+                    break
+                except:
+                    time.sleep(0.2)
 
-        # ⚡ Fast retry (no long delays)
-        for attempt in range(5):
-            try:
-                no_insurance.first.click(force=True)
-                log("✅ Insurance declined")
-                clicked = True
-                break
-            except:
-                time.sleep(0.2)
+            if not clicked:
+                log("⚠️ Insurance JS fallback")
+                page.evaluate("""
+                    let el = [...document.querySelectorAll('label')]
+                        .find(e => e.innerText.includes("No, I don't want"));
+                    if(el) el.click();
+                """)
 
-        # 🔁 JS fallback (last resort)
-        if not clicked:
-            log("⚠️ Insurance click fallback (JS)")
-            page.evaluate("""
-                let el = [...document.querySelectorAll('label')]
-                    .find(e => e.innerText.includes("No, I don't want"));
-                if(el) el.click();
-            """)
+            page.wait_for_timeout(300)
 
-        # ⚡ Minimal stabilization (critical)
-        page.wait_for_timeout(300)
+        except:
+            log("⚠️ Insurance not present — skipping")
+
+        # ==========================
+        # PAYMENT MODE (UPI FIXED)
+        # ==========================
+        log("💳 Selecting payment mode...")
+
+        try:
+            page.wait_for_selector("text=Payment Mode", timeout=10000)
+
+            # 🔍 DEBUG LOG
+            mode = str(cfg.get("payment_mode", "")).strip().lower()
+            log(f"🧠 Payment mode config: {mode}")
+
+            if mode in ["upi", "bhim", "bhim/upi"]:
+
+                log("🔎 Waiting for payment section readiness...")
+
+                # Wait for radios to exist
+                page.wait_for_function("""
+                    () => {
+                        const radios = document.querySelectorAll("input[type='radio'][name='paymentType']");
+                        return radios.length >= 2;
+                    }
+                """)
+
+                page.wait_for_timeout(400)
+
+                def select_upi():
+                    page.evaluate("""
+                        () => {
+                            const input = document.querySelector("input[type='radio'][value='2']");
+                            if(input){
+                                input.checked = true;
+                                input.click();
+                                input.dispatchEvent(new Event('change', { bubbles: true }));
+                            }
+                        }
+                    """)
+
+                # Retry loop (handles Angular re-render)
+                for attempt in range(2):
+                    log(f"⚡ UPI select attempt {attempt+1}")
+
+                    select_upi()
+                    page.wait_for_timeout(300)
+
+                    try:
+                        checked = page.locator("input[value='2']").first.is_checked()
+                    except:
+                        checked = False
+
+                    if checked:
+                        log("✅ UPI selected successfully")
+                        break
+                    else:
+                        log("⚠️ Retry required...")
+
+                final_check = page.locator("input[value='2']").first.is_checked()
+                log(f"🔍 Final UPI state: {final_check}")
+
+            else:
+                log(f"ℹ️ Payment mode '{mode}' not matched — skipping")
+
+        except Exception as e:
+            log(f"⚠️ Payment mode skipped: {e}")
 
         return True
 
@@ -626,7 +724,7 @@ def fill_passengers(page, cfg):
 
         try:
             page.screenshot(path="passenger_error.png")
-            log("📸 Screenshot saved: passenger_error.png")
+            log("📸 Screenshot saved")
         except:
             pass
 
@@ -723,6 +821,32 @@ def main():
     print("\n" + "="*50)
     print("  QT — Quick Tatkal Agent v1.0")
     print("="*50 + "\n")
+
+    # ✅ READ CONFIG FROM FLASK WHEN AVAILABLE
+    global config
+    if len(sys.argv) > 1:
+        try:
+            flask_config = json.loads(sys.argv[1])
+            config.update(flask_config)
+            log(f"📥 Config loaded from Flask: payment_mode={config.get('payment_mode')}, quota={config.get('quota')}")
+        except Exception as e:
+            log(f"⚠️ Failed to load config from Flask: {e}")
+    
+    # ✅ ENSURE ALL CRITICAL FIELDS HAVE VALUES
+    required_fields = {
+        'from_station': 'SBC',
+        'to_station': 'TLG',
+        'date': '25/03/2026',
+        'quota': 'GENERAL',
+        'train_number': '16227',
+        'travel_class': 'SL',
+        'mobile': '8660713011',
+        'payment_mode': 'upi'
+    }
+    for field, default in required_fields.items():
+        if not config.get(field):
+            config[field] = default
+            log(f"⚠️ Using default for {field}: {default}")
 
     offset = get_ntp_offset()
 

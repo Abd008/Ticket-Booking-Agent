@@ -4,6 +4,7 @@ import json
 
 app = Flask(__name__)
 
+
 # ---------------------------
 # HOME
 # ---------------------------
@@ -20,13 +21,34 @@ def start():
 
     data = request.form
 
+    # ✅ FIX: get payment_mode properly
+    payment_mode = data.get("payment_mode")
+
+    # ✅ FULL CONFIG (IMPORTANT)
     config = {
+        "quota": data.get("quota"),
         "from_station": data.get("from_station"),
         "to_station": data.get("to_station"),
         "date": data.get("date"),
         "train_number": data.get("train_number"),
         "travel_class": data.get("travel_class"),
+        "mobile": data.get("mobile"),
+
+        # ✅ THIS FIXES YOUR ISSUE
+        "payment_mode": payment_mode,
+
+        "passengers": [
+            {
+                "name": data.get("name"),
+                "age": data.get("age"),
+                "gender": data.get("gender"),
+                "berth": data.get("berth"),
+            }
+        ]
     }
+
+    # 🔍 DEBUG (VERY IMPORTANT)
+    print("CONFIG SENT TO AGENT:", config)
 
     subprocess.Popen([
         "python",
@@ -38,7 +60,7 @@ def start():
 
 
 # ---------------------------
-# 🔥 ADD THIS HERE
+# LOGS
 # ---------------------------
 @app.route('/logs')
 def get_logs():
