@@ -678,27 +678,53 @@ def fill_passengers(page, cfg):
 
                 page.wait_for_timeout(400)
 
+                # Select BHIM/UPI radio button (second option)
                 def select_upi():
                     page.evaluate("""
                         () => {
-                            const input = document.querySelector("input[type='radio'][value='2']");
+                            // Method 1: Select by value='2'
+                            let input = document.querySelector("input[type='radio'][value='2']");
                             if(input){
                                 input.checked = true;
                                 input.click();
                                 input.dispatchEvent(new Event('change', { bubbles: true }));
+                                input.dispatchEvent(new Event('click', { bubbles: true }));
+                                return true;
                             }
+                            
+                            // Method 2: Select by text containing BHIM/UPI
+                            let radios = document.querySelectorAll("input[type='radio'][name='paymentType']");
+                            for(let radio of radios){
+                                let label = radio.closest('div')?.textContent || '';
+                                if(label.includes('BHIM') || label.includes('UPI')){
+                                    radio.checked = true;
+                                    radio.click();
+                                    radio.dispatchEvent(new Event('change', { bubbles: true }));
+                                    return true;
+                                }
+                            }
+                            return false;
                         }
                     """)
 
                 # Retry loop (handles Angular re-render)
-                for attempt in range(2):
+                for attempt in range(3):
                     log(f"⚡ UPI select attempt {attempt+1}")
 
                     select_upi()
-                    page.wait_for_timeout(300)
+                    page.wait_for_timeout(500)
 
                     try:
-                        checked = page.locator("input[value='2']").first.is_checked()
+                        # Check if the second radio is selected
+                        checked = page.locator("input[type='radio'][value='2']").first.is_checked()
+                        if not checked:
+                            # Alternative check
+                            checked = page.evaluate("""
+                                () => {
+                                    let input = document.querySelector("input[type='radio'][value='2']");
+                                    return input && input.checked;
+                                }
+                            """)
                     except:
                         checked = False
 
@@ -706,16 +732,21 @@ def fill_passengers(page, cfg):
                         log("✅ UPI selected successfully")
                         break
                     else:
-                        log("⚠️ Retry required...")
+                        log(f"⚠️ Retry required... (attempt {attempt+1}/3)")
 
-                final_check = page.locator("input[value='2']").first.is_checked()
+                final_check = page.evaluate("""
+                    () => {
+                        let input = document.querySelector("input[type='radio'][value='2']");
+                        return input && input.checked;
+                    }
+                """)
                 log(f"🔍 Final UPI state: {final_check}")
 
             else:
                 log(f"ℹ️ Payment mode '{mode}' not matched — skipping")
 
         except Exception as e:
-            log(f"⚠️ Payment mode skipped: {e}")
+            log(f"⚠️ Payment mode selection failed: {e}")
 
         return True
 
