@@ -678,29 +678,27 @@ def fill_passengers(page, cfg):
 
                 page.wait_for_timeout(400)
 
-                # Select BHIM/UPI radio button (second option)
+                # Select BHIM/UPI radio button by finding the radio whose label contains BHIM/UPI
                 def select_upi():
                     page.evaluate("""
                         () => {
-                            // Method 1: Select by value='2'
-                            let input = document.querySelector("input[type='radio'][value='2']");
-                            if(input){
-                                input.checked = true;
-                                input.click();
-                                input.dispatchEvent(new Event('change', { bubbles: true }));
-                                input.dispatchEvent(new Event('click', { bubbles: true }));
-                                return true;
-                            }
-                            
-                            // Method 2: Select by text containing BHIM/UPI
-                            let radios = document.querySelectorAll("input[type='radio'][name='paymentType']");
-                            for(let radio of radios){
-                                let label = radio.closest('div')?.textContent || '';
-                                if(label.includes('BHIM') || label.includes('UPI')){
-                                    radio.checked = true;
-                                    radio.click();
-                                    radio.dispatchEvent(new Event('change', { bubbles: true }));
-                                    return true;
+                            // Find the radio button within the div that contains "Pay through BHIM/UPI" text
+                            let allDivs = document.querySelectorAll('div');
+                            for(let div of allDivs) {
+                                if(div.textContent.includes('Pay through BHIM/UPI') || div.textContent.includes('BHIM/UPI')) {
+                                    // Find the radio input inside or near this div
+                                    let radio = div.querySelector("input[type='radio']");
+                                    if(!radio) {
+                                        radio = div.parentElement.querySelector("input[type='radio']");
+                                    }
+                                    if(radio) {
+                                        console.log('Found BHIM/UPI radio, checking:', radio.value);
+                                        radio.checked = true;
+                                        radio.click();
+                                        radio.dispatchEvent(new Event('change', { bubbles: true }));
+                                        radio.dispatchEvent(new Event('click', { bubbles: true }));
+                                        return true;
+                                    }
                                 }
                             }
                             return false;
@@ -714,33 +712,50 @@ def fill_passengers(page, cfg):
                     select_upi()
                     page.wait_for_timeout(500)
 
-                    try:
-                        # Check if the second radio is selected
-                        checked = page.locator("input[type='radio'][value='2']").first.is_checked()
-                        if not checked:
-                            # Alternative check
-                            checked = page.evaluate("""
-                                () => {
-                                    let input = document.querySelector("input[type='radio'][value='2']");
-                                    return input && input.checked;
+                    # Verify: Check if any radio with BHIM/UPI text is now checked
+                    checked = page.evaluate("""
+                        () => {
+                            let allDivs = document.querySelectorAll('div');
+                            for(let div of allDivs) {
+                                if(div.textContent.includes('Pay through BHIM/UPI') || div.textContent.includes('BHIM/UPI')) {
+                                    let radio = div.querySelector("input[type='radio']");
+                                    if(!radio) {
+                                        radio = div.parentElement.querySelector("input[type='radio']");
+                                    }
+                                    if(radio) {
+                                        console.log('BHIM/UPI radio checked state:', radio.checked);
+                                        return radio.checked;
+                                    }
                                 }
-                            """)
-                    except:
-                        checked = False
+                            }
+                            return false;
+                        }
+                    """)
 
                     if checked:
-                        log("✅ UPI selected successfully")
+                        log("✅ BHIM/UPI selected successfully")
                         break
                     else:
                         log(f"⚠️ Retry required... (attempt {attempt+1}/3)")
 
                 final_check = page.evaluate("""
                     () => {
-                        let input = document.querySelector("input[type='radio'][value='2']");
-                        return input && input.checked;
+                        let allDivs = document.querySelectorAll('div');
+                        for(let div of allDivs) {
+                            if(div.textContent.includes('Pay through BHIM/UPI') || div.textContent.includes('BHIM/UPI')) {
+                                let radio = div.querySelector("input[type='radio']");
+                                if(!radio) {
+                                    radio = div.parentElement.querySelector("input[type='radio']");
+                                }
+                                if(radio) {
+                                    return radio.checked;
+                                }
+                            }
+                        }
+                        return false;
                     }
                 """)
-                log(f"🔍 Final UPI state: {final_check}")
+                log(f"🔍 Final BHIM/UPI state: {final_check}")
 
             else:
                 log(f"ℹ️ Payment mode '{mode}' not matched — skipping")
