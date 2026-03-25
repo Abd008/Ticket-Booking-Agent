@@ -583,54 +583,102 @@ def fill_passengers(page, cfg):
         start = time.time()
 
         # ==========================
-        # PASSENGER FILL (WITH ANGULAR DELAY)
+        # PASSENGER FILL (MASTER LIST AUTOCOMPLETE)
         # ==========================
         for i, p in enumerate(cfg['passengers']):
             log(f"👤 Passenger {i+1}: {p['name']}")
             
-            # Name field
+            # Click Name field to trigger autocomplete dropdown
             name_input = page.locator("input[placeholder='Name']").nth(i)
             name_input.click()
             human_delay(200, 400)
-            name_input.fill(p["name"])
-            human_delay(300, 600)  # Wait for Angular validation
-            name_input.blur()
-            human_delay(200, 400)
-
-            # Age field
-            age_input = page.locator(
-                "input[formcontrolname='passengerAge']"
-            ).nth(i)
-            age_input.click()
-            human_delay(200, 400)
-            age_input.fill(p["age"])
-            human_delay(300, 600)
-            age_input.blur()
-            human_delay(200, 400)
-
-            # Gender field
-            gender_select = page.locator(
-                "select[formcontrolname='passengerGender']"
-            ).nth(i)
-            gender_select.click()
-            human_delay(100, 300)
-            gender_select.select_option(p["gender"])
-            human_delay(300, 500)
-            gender_select.blur()
-            human_delay(200, 400)
-
-            # Berth field
-            berth_select = page.locator(
-                "select[formcontrolname='passengerBerthChoice']"
-            ).nth(i)
-            berth_select.click()
-            human_delay(100, 300)
-            berth_select.select_option(p["berth"])
-            human_delay(300, 500)
-            berth_select.blur()
-            human_delay(200, 400)
             
-            log(f"✅ Passenger {i+1} filled")
+            # Type first few characters to filter dropdown
+            name_input.fill(p["name"][:5])
+            human_delay(300, 600)  # Wait for dropdown to appear
+            
+            # Try to click on matching passenger from dropdown
+            try:
+                # Look for the dropdown option with this passenger's name
+                dropdown_option = page.locator(f"text=/.*{p['name']}.*/").first
+                if dropdown_option.is_visible():
+                    dropdown_option.click()
+                    human_delay(400, 800)  # Wait for all fields to auto-fill
+                    log(f"✅ Passenger {i+1} filled from master list")
+                else:
+                    # Fallback: fill fields manually if dropdown not available
+                    name_input.fill(p["name"])
+                    human_delay(300, 600)
+                    name_input.blur()
+                    human_delay(200, 400)
+                    
+                    age_input = page.locator(
+                        "input[formcontrolname='passengerAge']"
+                    ).nth(i)
+                    age_input.click()
+                    human_delay(200, 400)
+                    age_input.fill(p["age"])
+                    human_delay(300, 600)
+                    age_input.blur()
+                    human_delay(200, 400)
+
+                    gender_select = page.locator(
+                        "select[formcontrolname='passengerGender']"
+                    ).nth(i)
+                    gender_select.click()
+                    human_delay(100, 300)
+                    gender_select.select_option(p["gender"])
+                    human_delay(300, 500)
+                    gender_select.blur()
+                    human_delay(200, 400)
+
+                    berth_select = page.locator(
+                        "select[formcontrolname='passengerBerthChoice']"
+                    ).nth(i)
+                    berth_select.click()
+                    human_delay(100, 300)
+                    berth_select.select_option(p["berth"])
+                    human_delay(300, 500)
+                    berth_select.blur()
+                    human_delay(200, 400)
+                    
+                    log(f"✅ Passenger {i+1} filled manually (no master list)")
+            except Exception as e:
+                log(f"⚠️ Master list selection failed: {e}")
+                log(f"Filling {p['name']} manually...")
+                
+                # Full manual fill as fallback
+                name_input.clear()
+                name_input.fill(p["name"])
+                human_delay(300, 600)
+                name_input.blur()
+                human_delay(200, 400)
+                
+                age_input = page.locator(
+                    "input[formcontrolname='passengerAge']"
+                ).nth(i)
+                age_input.fill(p["age"])
+                human_delay(300, 600)
+                age_input.blur()
+                human_delay(200, 400)
+
+                gender_select = page.locator(
+                    "select[formcontrolname='passengerGender']"
+                ).nth(i)
+                gender_select.select_option(p["gender"])
+                human_delay(300, 500)
+                gender_select.blur()
+                human_delay(200, 400)
+
+                berth_select = page.locator(
+                    "select[formcontrolname='passengerBerthChoice']"
+                ).nth(i)
+                berth_select.select_option(p["berth"])
+                human_delay(300, 500)
+                berth_select.blur()
+                human_delay(200, 400)
+                
+                log(f"✅ Passenger {i+1} filled")
 
         # Mobile - with longer delay
         log("📱 Filling mobile number...")
