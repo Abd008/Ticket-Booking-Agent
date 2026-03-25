@@ -62,6 +62,22 @@ def log(msg):
     with open("logs.txt", "a", encoding="utf-8") as f:
         f.write(line + "\n")
 
+# ============================================
+# HUMAN-LIKE BEHAVIOR FUNCTIONS
+# ============================================
+
+def human_delay(min_ms=500, max_ms=2000):
+    """Random delay to mimic human reaction time"""
+    delay = random.uniform(min_ms, max_ms) / 1000
+    time.sleep(delay)
+
+def human_move_and_click(page, locator):
+    """Move mouse to element before clicking (human-like behavior)"""
+    human_delay(300, 800)
+    locator.scroll_into_view_if_needed()
+    human_delay(100, 300)
+    locator.click()
+
 def get_ntp_offset():
     try:
         client = ntplib.NTPClient()
@@ -567,201 +583,280 @@ def fill_passengers(page, cfg):
         start = time.time()
 
         # ==========================
-        # PASSENGER FILL
+        # PASSENGER FILL (WITH ANGULAR DELAY)
         # ==========================
         for i, p in enumerate(cfg['passengers']):
-            page.locator("input[placeholder='Name']").nth(i).fill(p["name"])
+            log(f"👤 Passenger {i+1}: {p['name']}")
+            
+            # Name field
+            name_input = page.locator("input[placeholder='Name']").nth(i)
+            name_input.click()
+            human_delay(200, 400)
+            name_input.fill(p["name"])
+            human_delay(300, 600)  # Wait for Angular validation
+            name_input.blur()
+            human_delay(200, 400)
 
-            page.locator(
+            # Age field
+            age_input = page.locator(
                 "input[formcontrolname='passengerAge']"
-            ).nth(i).fill(p["age"])
+            ).nth(i)
+            age_input.click()
+            human_delay(200, 400)
+            age_input.fill(p["age"])
+            human_delay(300, 600)
+            age_input.blur()
+            human_delay(200, 400)
 
-            page.locator(
+            # Gender field
+            gender_select = page.locator(
                 "select[formcontrolname='passengerGender']"
-            ).nth(i).select_option(p["gender"])
+            ).nth(i)
+            gender_select.click()
+            human_delay(100, 300)
+            gender_select.select_option(p["gender"])
+            human_delay(300, 500)
+            gender_select.blur()
+            human_delay(200, 400)
 
-            page.locator(
+            # Berth field
+            berth_select = page.locator(
                 "select[formcontrolname='passengerBerthChoice']"
-            ).nth(i).select_option(p["berth"])
+            ).nth(i)
+            berth_select.click()
+            human_delay(100, 300)
+            berth_select.select_option(p["berth"])
+            human_delay(300, 500)
+            berth_select.blur()
+            human_delay(200, 400)
+            
+            log(f"✅ Passenger {i+1} filled")
 
-        # Mobile
-        page.locator("input#mobileNumber").fill(cfg["mobile"])
+        # Mobile - with longer delay
+        log("📱 Filling mobile number...")
+        mobile_input = page.locator("input#mobileNumber")
+        mobile_input.click()
+        human_delay(200, 400)
+        mobile_input.fill(cfg["mobile"])
+        human_delay(400, 800)  # Longer wait for mobile validation
+        mobile_input.blur()
+        human_delay(300, 500)
 
         elapsed = time.time() - start
         log(f"✅ Form filled in {elapsed:.2f}s")
 
         # ==========================
-        # CONTINUE BUTTON
+        # PAYMENT MODE (UPI) — BEFORE CONTINUE
         # ==========================
-        log("⏳ Waiting for Angular validation...")
+        log("💳 Selecting payment mode (UPI) on this form...")
 
+        try:
+            payment_mode = str(cfg.get("payment_mode", "")).strip().lower()
+            
+            if payment_mode in ["upi", "bhim", "bhim/upi"]:
+                log("🔎 Looking for UPI/BHIM payment option...")
+                human_delay(300, 600)
+                
+                # Try to find payment section on this form
+                try:
+                    page.wait_for_selector("text=Payment Mode", timeout=5000)
+                    log("✅ Payment Mode section visible")
+                    human_delay(500, 1000)
+                    
+                    # First, see what payment options exist
+                    page.evaluate("""
+                        () => {
+                            const radios = document.querySelectorAll("input[type='radio'][name='paymentType']");
+                            console.log('Found ' + radios.length + ' payment radio buttons');
+                            for (let i = 0; i < radios.length; i++) {
+                                const label = radios[i].closest("label, tr");
+                                console.log('Radio ' + i + ': ' + (label ? label.innerText.substring(0, 50) : 'no label'));
+                            }
+                        }
+                    """)
+                    
+                    # Click the UPI radio button
+                    upi_found = page.evaluate("""
+                        () => {
+                            const radios = document.querySelectorAll("input[type='radio'][name='paymentType']");
+                            console.log('Searching for BHIM/UPI among ' + radios.length + ' options');
+                            
+                            for (let i = 0; i < radios.length; i++) {
+                                const radio = radios[i];
+                                const container = radio.closest("tr") || radio.closest("label") || radio.closest("div");
+                                if (container) {
+                                    const text = container.innerText.toUpperCase();
+                                    console.log('Radio ' + i + ' value=' + radio.value + ' text: ' + text.substring(0, 60));
+                                    
+                                    if (text.includes('BHIM') || text.includes('UPI')) {
+                                        console.log('Found match! Radio ' + i + ' with value: ' + radio.value);
+                                        console.log('Before click - checked: ' + radio.checked);
+                                        
+                                        radio.click();
+                                        radio.checked = true;
+                                        radio.dispatchEvent(new Event('change', { bubbles: true }));
+                                        radio.dispatchEvent(new Event('click', { bubbles: true }));
+                                        
+                                        // Verify immediately
+                                        console.log('After click - radio.checked: ' + radio.checked);
+                                        
+                                        return {
+                                            success: true,
+                                            radioIndex: i,
+                                            radioValue: radio.value,
+                                            isChecked: radio.checked,
+                                            containerText: text.substring(0, 100)
+                                        };
+                                    }
+                                }
+                            }
+                            console.log('UPI option NOT found in any radio');
+                            return {
+                                success: false,
+                                reason: 'UPI text not found in any radio container'
+                            };
+                        }
+                    """)
+                    
+                    log(f"UPI Click Result: {upi_found}")
+                    
+                    if upi_found.get('success'):
+                        radio_info = f"Radio #{upi_found.get('radioIndex')} (value={upi_found.get('radioValue')})"
+                        is_checked = upi_found.get('isChecked')
+                        container_text = upi_found.get('containerText', '')
+                        
+                        log(f"✅ Clicked {radio_info}")
+                        log(f"   Text: {container_text}")
+                        log(f"   Checked: {is_checked}")
+                        
+                        if is_checked:
+                            log("✅ UPI selected successfully (VERIFIED)")
+                        else:
+                            log("⚠️ Radio clicked but NOT checked - trying alternative method")
+                            # Try clicking via label
+                            alt_result = page.evaluate("""
+                                () => {
+                                    const labels = document.querySelectorAll("label");
+                                    for (let label of labels) {
+                                        if (label.innerText.includes("BHIM") || label.innerText.includes("UPI")) {
+                                            console.log("Found label with UPI text, clicking...");
+                                            label.click();
+                                            const radio = label.querySelector("input[type='radio']");
+                                            if (radio) {
+                                                console.log("After label click - radio checked: " + radio.checked);
+                                                return radio.checked;
+                                            }
+                                        }
+                                    }
+                                    return false;
+                                }
+                            """)
+                            if alt_result:
+                                log("✅ UPI selected via label click")
+                            else:
+                                log("❌ UPI still not selected")
+                        
+                        human_delay(800, 1500)
+                    else:
+                        reason = upi_found.get('reason', 'unknown')
+                        log(f"❌ UPI option not found: {reason}")
+                        log("⚠️ Attempting manual UPI selection...")
+                        input("MANUAL: Please select UPI/BHIM and press ENTER")
+                    
+                except Exception as e:
+                    log(f"⚠️ Payment mode search error: {e}")
+                    input("MANUAL: Please select UPI/BHIM and press ENTER")
+            else:
+                log(f"ℹ️ Payment mode '{payment_mode}' not UPI — skipping")
+        
+        except Exception as e:
+            log(f"❌ Payment mode selection error: {e}")
+
+        human_delay(500, 1000)
+
+        # ==========================
+        # CONTINUE BUTTON (CAUTIOUS APPROACH)
+        # ==========================
+        log("⏳ Waiting for Angular form validation...")
+
+        # Wait for Angular to mark form as valid
         page.wait_for_function("""
             () => {
                 const btn = [...document.querySelectorAll("button")]
                     .find(b => b.innerText.trim() === "Continue");
-                return btn && !btn.disabled;
+                if (!btn) return false;
+                // Check if button is enabled (not disabled)
+                return !btn.disabled;
             }
-        """)
+        """, timeout=30000)
 
-        continue_btn = page.locator(
-            "button:has-text('Continue'):visible"
-        ).first
+        log("✅ Continue button is now enabled")
+        human_delay(500, 1000)  # Wait a bit more for safety
 
-        log("🖱 Clicking Continue...")
-        continue_btn.click()
-        log("✅ Continue clicked")
+        # Extra wait to ensure Angular has finished all validations
+        page.wait_for_timeout(1000)
 
         # ==========================
-        # INSURANCE (OPTIONAL)
+        # INSURANCE (OPTIONAL) — BEFORE CONTINUE
         # ==========================
         log("⏳ Checking for insurance section...")
 
         try:
             page.wait_for_selector(
                 "label:has-text(\"No, I don't want travel insurance\")",
-                timeout=5000
+                timeout=3000
             )
 
-            log("✅ Insurance detected")
+            log("✅ Insurance section detected")
 
             no_insurance = page.locator(
                 "label:has-text(\"No, I don't want travel insurance\")"
             )
 
-            clicked = False
-
-            for _ in range(5):
+            # Click to decline insurance
+            for attempt in range(3):
                 try:
-                    no_insurance.first.click(force=True)
-                    clicked = True
+                    no_insurance.first.click(timeout=2000)
                     log("✅ Insurance declined")
+                    human_delay(300, 600)
                     break
                 except:
-                    time.sleep(0.2)
-
-            if not clicked:
-                log("⚠️ Insurance JS fallback")
-                page.evaluate("""
-                    let el = [...document.querySelectorAll('label')]
-                        .find(e => e.innerText.includes("No, I don't want"));
-                    if(el) el.click();
-                """)
-
-            page.wait_for_timeout(300)
+                    if attempt < 2:
+                        log(f"⚠️ Insurance click failed, retry {attempt+1}/3")
+                        human_delay(200, 400)
 
         except:
-            log("⚠️ Insurance not present — skipping")
+            log("ℹ️ Insurance not present on form — skipping")
+
+        human_delay(500, 1000)
 
         # ==========================
-        # PAYMENT MODE (UPI FIXED)
+        # CLICK CONTINUE BUTTON
         # ==========================
-        log("💳 Selecting payment mode...")
+        continue_btn = page.locator(
+            "button:has-text('Continue')"
+        ).first
 
-        try:
-            page.wait_for_selector("text=Payment Mode", timeout=10000)
-
-            # 🔍 DEBUG LOG
-            mode = str(cfg.get("payment_mode", "")).strip().lower()
-            log(f"🧠 Payment mode config: {mode}")
-
-            if mode in ["upi", "bhim", "bhim/upi"]:
-
-                log("🔎 Waiting for payment section readiness...")
-
-                # Wait for radios to exist
-                page.wait_for_function("""
-                    () => {
-                        const radios = document.querySelectorAll("input[type='radio'][name='paymentType']");
-                        return radios.length >= 2;
+        # Verify button is visible and enabled
+        if continue_btn.is_visible() and continue_btn.is_enabled():
+            log("🖱 Clicking Continue button...")
+            human_delay(200, 500)
+            continue_btn.click()
+            log("✅ Continue clicked")
+            human_delay(1000, 2000)  # Wait for page transition
+        else:
+            log("⚠️ Continue button not ready, using alternative click")
+            page.evaluate("""
+                () => {
+                    let btn = [...document.querySelectorAll("button")]
+                        .find(b => b.innerText.trim() === "Continue");
+                    if (btn && !btn.disabled) {
+                        btn.click();
                     }
-                """)
-
-                page.wait_for_timeout(400)
-
-                # Select BHIM/UPI radio button by finding the radio whose label contains BHIM/UPI
-                def select_upi():
-                    page.evaluate("""
-                        () => {
-                            // Find the radio button within the div that contains "Pay through BHIM/UPI" text
-                            let allDivs = document.querySelectorAll('div');
-                            for(let div of allDivs) {
-                                if(div.textContent.includes('Pay through BHIM/UPI') || div.textContent.includes('BHIM/UPI')) {
-                                    // Find the radio input inside or near this div
-                                    let radio = div.querySelector("input[type='radio']");
-                                    if(!radio) {
-                                        radio = div.parentElement.querySelector("input[type='radio']");
-                                    }
-                                    if(radio) {
-                                        console.log('Found BHIM/UPI radio, checking:', radio.value);
-                                        radio.checked = true;
-                                        radio.click();
-                                        radio.dispatchEvent(new Event('change', { bubbles: true }));
-                                        radio.dispatchEvent(new Event('click', { bubbles: true }));
-                                        return true;
-                                    }
-                                }
-                            }
-                            return false;
-                        }
-                    """)
-
-                # Retry loop (handles Angular re-render)
-                for attempt in range(3):
-                    log(f"⚡ UPI select attempt {attempt+1}")
-
-                    select_upi()
-                    page.wait_for_timeout(500)
-
-                    # Verify: Check if any radio with BHIM/UPI text is now checked
-                    checked = page.evaluate("""
-                        () => {
-                            let allDivs = document.querySelectorAll('div');
-                            for(let div of allDivs) {
-                                if(div.textContent.includes('Pay through BHIM/UPI') || div.textContent.includes('BHIM/UPI')) {
-                                    let radio = div.querySelector("input[type='radio']");
-                                    if(!radio) {
-                                        radio = div.parentElement.querySelector("input[type='radio']");
-                                    }
-                                    if(radio) {
-                                        console.log('BHIM/UPI radio checked state:', radio.checked);
-                                        return radio.checked;
-                                    }
-                                }
-                            }
-                            return false;
-                        }
-                    """)
-
-                    if checked:
-                        log("✅ BHIM/UPI selected successfully")
-                        break
-                    else:
-                        log(f"⚠️ Retry required... (attempt {attempt+1}/3)")
-
-                final_check = page.evaluate("""
-                    () => {
-                        let allDivs = document.querySelectorAll('div');
-                        for(let div of allDivs) {
-                            if(div.textContent.includes('Pay through BHIM/UPI') || div.textContent.includes('BHIM/UPI')) {
-                                let radio = div.querySelector("input[type='radio']");
-                                if(!radio) {
-                                    radio = div.parentElement.querySelector("input[type='radio']");
-                                }
-                                if(radio) {
-                                    return radio.checked;
-                                }
-                            }
-                        }
-                        return false;
-                    }
-                """)
-                log(f"🔍 Final BHIM/UPI state: {final_check}")
-
-            else:
-                log(f"ℹ️ Payment mode '{mode}' not matched — skipping")
-
-        except Exception as e:
-            log(f"⚠️ Payment mode selection failed: {e}")
+                }
+            """)
+            log("✅ Continue clicked (JS fallback)")
+            human_delay(1000, 2000)
 
         return True
 
