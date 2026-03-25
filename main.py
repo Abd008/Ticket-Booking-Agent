@@ -675,7 +675,7 @@ def fill_passengers(page, cfg):
                         }
                     """)
                     
-                    # Click the UPI radio button
+                    # Click the UPI radio button - SPECIFICALLY "BHIM/UPI" option
                     upi_found = page.evaluate("""
                         () => {
                             const radios = document.querySelectorAll("input[type='radio'][name='paymentType']");
@@ -688,8 +688,13 @@ def fill_passengers(page, cfg):
                                     const text = container.innerText.toUpperCase();
                                     console.log('Radio ' + i + ' value=' + radio.value + ' text: ' + text.substring(0, 60));
                                     
-                                    if (text.includes('BHIM') || text.includes('UPI')) {
-                                        console.log('Found match! Radio ' + i + ' with value: ' + radio.value);
+                                    // Look SPECIFICALLY for "BHIM/UPI" or "BHIM" or "PAY THROUGH BHIM"
+                                    // NOT "UPI_CC" or "UPI_CL"
+                                    const hasBHIM = text.includes('BHIM');
+                                    const isPureUPI = text.includes('PAY THROUGH BHIM') || (text.includes('/UPI') && !text.includes('UPI_'));
+                                    
+                                    if (hasBHIM || isPureUPI) {
+                                        console.log('Found BHIM/UPI match! Radio ' + i + ' with value: ' + radio.value);
                                         console.log('Before click - checked: ' + radio.checked);
                                         
                                         radio.click();
@@ -710,10 +715,10 @@ def fill_passengers(page, cfg):
                                     }
                                 }
                             }
-                            console.log('UPI option NOT found in any radio');
+                            console.log('Pure BHIM/UPI option NOT found');
                             return {
                                 success: false,
-                                reason: 'UPI text not found in any radio container'
+                                reason: 'Dedicated BHIM/UPI option not found (found UPI_CC/UPI_CL but that is not pure BHIM)'
                             };
                         }
                     """)
@@ -730,38 +735,17 @@ def fill_passengers(page, cfg):
                         log(f"   Checked: {is_checked}")
                         
                         if is_checked:
-                            log("✅ UPI selected successfully (VERIFIED)")
+                            log("✅ UPI/BHIM selected successfully (VERIFIED)")
                         else:
-                            log("⚠️ Radio clicked but NOT checked - trying alternative method")
-                            # Try clicking via label
-                            alt_result = page.evaluate("""
-                                () => {
-                                    const labels = document.querySelectorAll("label");
-                                    for (let label of labels) {
-                                        if (label.innerText.includes("BHIM") || label.innerText.includes("UPI")) {
-                                            console.log("Found label with UPI text, clicking...");
-                                            label.click();
-                                            const radio = label.querySelector("input[type='radio']");
-                                            if (radio) {
-                                                console.log("After label click - radio checked: " + radio.checked);
-                                                return radio.checked;
-                                            }
-                                        }
-                                    }
-                                    return false;
-                                }
-                            """)
-                            if alt_result:
-                                log("✅ UPI selected via label click")
-                            else:
-                                log("❌ UPI still not selected")
+                            log("⚠️ Radio clicked but NOT checked")
                         
                         human_delay(800, 1500)
                     else:
                         reason = upi_found.get('reason', 'unknown')
-                        log(f"❌ UPI option not found: {reason}")
-                        log("⚠️ Attempting manual UPI selection...")
-                        input("MANUAL: Please select UPI/BHIM and press ENTER")
+                        log(f"⚠️ {reason}")
+                        log("❌ Pure BHIM/UPI option not found")
+                        log("⚠️ Manual UPI selection required...")
+                        input("MANUAL: Please click BHIM/UPI radio button and press ENTER")
                     
                 except Exception as e:
                     log(f"⚠️ Payment mode search error: {e}")
