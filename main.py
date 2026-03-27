@@ -20,7 +20,7 @@ import sys
 config = {
     "from_station": "SBC",
     "to_station":   "TLG",
-    "date":         "25/03/2026",
+    "date":         "26/03/2026",
     "quota":        "GENERAL",
     "train_number": "16227",
     "travel_class": "SL",
